@@ -140,6 +140,49 @@ website/                       官网静态页（发布内容同步至 gh-pages 
 会直接编译失败。这不是洁癖，而是可验证性的前提：它保证引擎能被 `swift test`
 与无界面自检直接驱动，不需要先起一个 GUI。
 
+## 发布流程
+
+仓库有三个对外产物：**代码（`main`）**、**安装包（Releases）**、**官网（`gh-pages`）**。
+
+### 安装包
+
+版本号只有一处来源 —— `Scripts/build_app.sh` 的 `APP_VERSION`，`make_dmg.sh` 从那里读。
+这样不会出现「应用内显示 1.0.0、文件名写着 1.0.1」这类不一致。
+
+```bash
+cd SyncApp
+bash Scripts/make_dmg.sh 1.0.0 arm64
+bash Scripts/make_dmg.sh 1.0.0 x86_64
+
+git tag -a v1.0.0 -m "sync-engine v1.0.0"
+git push origin v1.0.0
+# 然后在 GitHub 上创建 Release 并上传 dist/ 下的两个 dmg
+```
+
+**发版前的核对清单**（这几项都做过，写下来免得下次漏）：
+
+1. `swift test` 全绿 —— 单元测试
+2. `dist/sync-engine.app/Contents/MacOS/sync-engine --selfcheck` 全绿 —— 跑的是**打包产物本身**
+3. `bash Scripts/verify_appearance.sh` 全绿 —— 三种外观模式 × 静态启动与运行中切换
+4. 两个 DMG **挂载后实跑自检**，并核对架构与 Info.plist 名称
+5. Release 里附上 SHA-256，用户可自行校验
+
+### 官网
+
+`gh-pages` 分支的根就是站点内容，**源文件在 `main` 的 `website/`**。两者需要手动同步：
+
+```bash
+git worktree add -b gh-pages /tmp/gh-pages-site
+cd /tmp/gh-pages-site
+git rm -rq . && rsync -a --exclude .DS_Store /path/to/repo/website/ ./
+touch .nojekyll          # 让 Pages 跳过 Jekyll 处理
+git add -A && git commit -m "更新官网" && git push origin gh-pages
+cd - && git worktree remove /tmp/gh-pages-site
+```
+
+> 用独立 worktree 而不是在主工作区分支间来回切 —— 在主工作区做
+> `git rm -r .` 会**真的删掉工作目录里的文件**，风险不成比例。
+
 ## 许可证
 
 [MIT](LICENSE) © 2026 SyncEngine-macOS Contributors

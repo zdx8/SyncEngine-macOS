@@ -130,11 +130,12 @@ SyncApp/                          SwiftPM 包
 │   └── SMBDriverTests.swift        真实挂载点的只读验证
 ├── Scripts/
 │   ├── build_app.sh                组装 .app（图标 + Info.plist + 签名）
+│   ├── make_dmg.sh                 打成发行版 DMG（版本号取自 build_app.sh）
 │   ├── make_icon.swift             AppKit 绘制图标
 │   ├── window_probe.swift          取窗口编号与标题（供精确截图）
 │   ├── verify_appearance.sh        外观状态矩阵验证（静态 × 3 + 切换 × 3）
 │   └── probe_close/main.swift      关闭行为探针
-└── dist/                           打包产物
+└── dist/                           打包产物（不入库）
 ```
 
 **分两个 target 是可验证性的基础**：SwiftPM 的依赖关系会在编译期强制
