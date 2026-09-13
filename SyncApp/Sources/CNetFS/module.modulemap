@@ -1,0 +1,15 @@
+// NetFS 的系统库封装。
+//
+// 为什么需要它：macOS 用 NetFS 框架完成「挂载网络卷」这件事（访达的
+// 连接服务器就是走这里），而 SwiftPM 无法直接 import C 框架 —— 没有
+// 现成的 .swiftmodule，只有 SDK 里的头文件。所以用一个 systemLibrary 目标
+// 把 module map 提供出来。
+//
+// `link framework` 而不是 `link`：NetFS 是 framework 而非 dylib。
+// 写 `link "NetFS"` 会让链接器去找 libNetFS.dylib，直接报
+// "library 'NetFS' not found"。
+module CNetFS [system] {
+    header "shim.h"
+    link framework "NetFS"
+    export *
+}

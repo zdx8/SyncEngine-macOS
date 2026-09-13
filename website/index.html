@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sync-engine — macOS 原生数据同步工具</title>
+<meta name="description" content="sync-engine 是 macOS 原生数据同步工具，用 SwiftUI 构建、零第三方依赖。用 SHA-256 内容指纹而非时间戳判断变更，支持本地目录、SMB 与 WebDAV 目标端。">
+<link rel="icon" type="image/png" href="AppIcon.png">
+<style>
+  :root {
+    --green-900: #0f3d16;
+    --green-800: #14532d;
+    --green-700: #15803d;
+    --green-600: #1f9e3f;
+    --green-500: #22a322;
+    --green-400: #32cd32;
+    --green-100: #dcfce7;
+    --green-50: #f4fdf5;
+    --ink-900: #101828;
+    --ink-700: #344054;
+    --ink-500: #667085;
+    --ink-300: #d0d5dd;
+    --ink-100: #f2f4f7;
+    --amber-700: #b86b08;
+    --amber-50: #fff8ec;
+    --bg: #ffffff;
+    --radius: 16px;
+    --shadow: 0 1px 3px rgba(16,24,40,.08), 0 8px 32px rgba(16,24,40,.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC", "Helvetica Neue", sans-serif;
+    color: var(--ink-900);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--green-700); }
+
+  /* ---------- Nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,.82);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--ink-100);
+  }
+  .nav-inner { display: flex; align-items: center; height: 60px; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--ink-900); text-decoration: none; }
+  .brand img { width: 30px; height: 30px; border-radius: 7px; }
+  .nav-links { display: flex; gap: 24px; margin-left: auto; align-items: center; }
+  .nav-links a { color: var(--ink-700); text-decoration: none; font-size: 14.5px; font-weight: 500; }
+  .nav-links a:hover { color: var(--green-700); }
+  .nav-cta {
+    background: var(--green-700); color: #fff !important;
+    padding: 7px 16px; border-radius: 999px; font-weight: 600;
+  }
+  .nav-cta:hover { background: var(--green-600); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    padding: 84px 0 72px;
+    background:
+      radial-gradient(900px 420px at 15% -10%, var(--green-50), transparent 65%),
+      radial-gradient(700px 380px at 90% 0%, #eefdf0, transparent 60%);
+    text-align: center;
+  }
+  .hero img.appicon {
+    width: 112px; height: 112px; border-radius: 26px;
+    box-shadow: 0 12px 40px rgba(34,163,34,.28);
+    margin-bottom: 28px;
+  }
+  .hero h1 { font-size: 46px; line-height: 1.15; letter-spacing: -0.02em; }
+  .hero h1 .grad {
+    background: linear-gradient(120deg, var(--green-700), var(--green-400));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .tagline { font-size: 20px; color: var(--ink-700); margin-top: 16px; font-weight: 500; }
+  .hero .sub { font-size: 16px; color: var(--ink-500); margin-top: 10px; max-width: 660px; margin-left: auto; margin-right: auto; }
+  .hero-actions { margin-top: 34px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 26px; border-radius: 12px; font-size: 15.5px; font-weight: 600;
+    text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--green-700); color: #fff; box-shadow: 0 6px 20px rgba(21,128,61,.32); }
+  .btn-primary:hover { background: var(--green-600); }
+  .btn-ghost { background: #fff; color: var(--ink-900); border: 1px solid var(--ink-300); }
+  .btn-ghost:hover { border-color: var(--green-600); color: var(--green-700); }
+  .btn svg { width: 17px; height: 17px; }
+  .badges { margin-top: 26px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    font-size: 13px; font-weight: 500; color: var(--ink-700);
+    background: #fff; border: 1px solid var(--ink-100);
+    padding: 5px 14px; border-radius: 999px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .badge b { color: var(--green-700); }
+
+  /* ---------- 章节 ---------- */
+  section { padding: 76px 0; }
+  section.alt { background: var(--ink-100); }
+  .sec-head { text-align: center; margin-bottom: 46px; }
+  .sec-head .kicker {
+    display: inline-block; font-size: 12.5px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--green-700);
+    background: var(--green-100); padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .sec-head h2 { font-size: 31px; letter-spacing: -0.01em; }
+  .sec-head p { color: var(--ink-500); margin-top: 12px; max-width: 640px; margin-left: auto; margin-right: auto; }
+
+  /* ---------- 功能卡片 ---------- */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: #fff; border: 1px solid var(--ink-100); border-radius: var(--radius);
+    padding: 22px 22px 24px; box-shadow: var(--shadow);
+  }
+  .card .ico {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--green-100); color: var(--green-700);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+  }
+  .card .ico svg { width: 20px; height: 20px; }
+  .card h3 { font-size: 16px; margin-bottom: 8px; }
+  .card p { font-size: 14px; color: var(--ink-500); }
+
+  /* ---------- 截图（纯 CSS 切换，无 JS） ---------- */
+  .shots { max-width: 940px; margin: 0 auto; }
+  .shots input { position: absolute; opacity: 0; pointer-events: none; }
+  .shot-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .shot-tabs label {
+    cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink-700);
+    padding: 8px 18px; border-radius: 999px; border: 1px solid var(--ink-300); background: #fff;
+    transition: all .15s;
+  }
+  .shot-tabs label:hover { border-color: var(--green-600); color: var(--green-700); }
+  .shot-panes { position: relative; }
+  .pane { display: none; }
+  .pane img {
+    width: 100%; height: auto; display: block;
+    border-radius: 12px; border: 1px solid var(--ink-300);
+    box-shadow: 0 16px 48px rgba(16,24,40,.14);
+  }
+  .pane figcaption { text-align: center; font-size: 13.5px; color: var(--ink-500); margin-top: 14px; }
+  #s1:checked ~ .shot-tabs label[for="s1"],
+  #s2:checked ~ .shot-tabs label[for="s2"],
+  #s3:checked ~ .shot-tabs label[for="s3"] {
+    background: var(--green-700); border-color: var(--green-700); color: #fff;
+  }
+  #s1:checked ~ .shot-panes #p1,
+  #s2:checked ~ .shot-panes #p2,
+  #s3:checked ~ .shot-panes #p3 { display: block; }
+
+  /* ---------- 下载 ---------- */
+  .dl-wrap { max-width: 760px; margin: 0 auto; }
+  .dl {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border: 1px solid var(--ink-100); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .dl .meta { flex: 1; }
+  .dl .meta strong { display: block; font-size: 15.5px; }
+  .dl .meta span { font-size: 13px; color: var(--ink-500); }
+  .dl a.get {
+    background: var(--green-700); color: #fff; text-decoration: none;
+    font-size: 14px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+    white-space: nowrap;
+  }
+  .dl a.get:hover { background: var(--green-600); }
+  .note {
+    margin-top: 18px; font-size: 13.5px; color: var(--amber-700);
+    background: var(--amber-50); border: 1px solid #fde3b5;
+    border-left: 3px solid var(--amber-700);
+    padding: 13px 16px; border-radius: 8px;
+  }
+
+  /* ---------- 状态（如实标注未完成） ---------- */
+  .status { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 900px; margin: 0 auto; }
+  @media (max-width: 720px) { .status { grid-template-columns: 1fr; } }
+  .status .box { background: #fff; border: 1px solid var(--ink-100); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+  .status h3 { font-size: 15.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .status h3 .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .done h3 .dot { background: var(--green-500); }
+  .todo h3 .dot { background: var(--amber-700); }
+  .status ul { list-style: none; }
+  .status li { font-size: 13.8px; color: var(--ink-700); padding: 7px 0 7px 20px; position: relative; border-top: 1px solid var(--ink-100); }
+  .status li:first-child { border-top: 0; }
+  .status li::before { content: ""; position: absolute; left: 4px; top: 16px; width: 6px; height: 6px; border-radius: 50%; }
+  .done li::before { background: var(--green-500); }
+  .todo li::before { background: var(--amber-700); }
+  .status li b { color: var(--ink-900); }
+
+  /* ---------- 代码块 ---------- */
+  pre {
+    background: #0d1117; color: #e6edf3; border-radius: 12px;
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.75;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  pre .c { color: #8b949e; }
+  .code-wrap { max-width: 780px; margin: 0 auto; }
+  .code-wrap h3 { font-size: 15.5px; margin: 26px 0 10px; }
+  .code-wrap h3:first-child { margin-top: 0; }
+
+  /* ---------- 表格 ---------- */
+  .tbl { max-width: 900px; margin: 0 auto; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--ink-100); }
+  th { background: var(--ink-100); font-size: 13px; color: var(--ink-700); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+
+  /* ---------- Footer ---------- */
+  footer { padding: 44px 0; border-top: 1px solid var(--ink-100); text-align: center; color: var(--ink-500); font-size: 13.5px; }
+  footer a { color: var(--ink-700); text-decoration: none; margin: 0 8px; }
+  footer a:hover { color: var(--green-700); }
+  footer .muted { margin-top: 10px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container nav-inner">
+    <a class="brand" href="#top"><img src="AppIcon.png" alt="sync-engine 图标">sync-engine</a>
+    <div class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#shots">截图</a>
+      <a href="#status">进度</a>
+      <a href="#download">下载</a>
+      <a class="nav-cta" href="https://github.com/zdx8/SyncEngine-macOS" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="container">
+    <img class="appicon" src="AppIcon.png" alt="sync-engine 应用图标">
+    <h1>把目录<span class="grad">稳妥地</span>同步到另一处</h1>
+    <p class="tagline">macOS 原生 · SwiftUI + Swift · 零第三方依赖</p>
+    <p class="sub">
+      用 SHA-256 内容指纹而不是修改时间判断变更 —— 外接盘常是 FAT／exFAT（时间戳精度只有 2 秒），
+      时钟也会漂移，靠时间戳判变更必然出错。目标端支持本地目录、SMB 与 WebDAV。
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/zdx8/SyncEngine-macOS/releases/download/v1.0.0/sync-engine-v1.0.0-arm64.dmg">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.25A.75.75 0 0 1 8 1.5ZM2.75 12a.75.75 0 0 1 .75.75v.5h9v-.5a.75.75 0 0 1 1.5 0v1a.75.75 0 0 1-.75.75H2.75a.75.75 0 0 1-.75-.75v-1A.75.75 0 0 1 2.75 12Z"/></svg>
+        下载 Apple Silicon 版
+      </a>
+      <a class="btn btn-ghost" href="#download">Intel 版</a>
+    </div>
+    <div class="badges">
+      <span class="badge"><b>macOS 14+</b></span>
+      <span class="badge"><b>Swift 6</b> 构建</span>
+      <span class="badge"><b>零</b>第三方依赖</span>
+      <span class="badge"><b>76</b> 项单元测试</span>
+      <span class="badge"><b>MIT</b> 许可</span>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">功能</span>
+      <h2>已实现的能力</h2>
+      <p>下面每一条都是可验证的已实现功能。尚未实现的部分在「进度」一节里逐条列明。</p>
+    </div>
+    <div class="cards">
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 1.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11ZM8 4a.75.75 0 0 1 .75.75v3.06l2.15 1.24a.75.75 0 1 1-.75 1.3l-2.5-1.45A.75.75 0 0 1 7.25 8.4V4.75A.75.75 0 0 1 8 4Z"/></svg></div>
+        <h3>内容指纹判变更</h3>
+        <p>逐文件 SHA-256，用内容而非时间戳判断是否改动。时间戳只用来缩小候选范围，不参与最终裁决。</p>
+      </div>
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.75 2a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5Zm6.5 8a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5Zm0-5.5a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5ZM4.75 10a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5Z"/></svg></div>
+        <h3>并发哈希</h3>
+        <p>多核并行、滑动窗口控制内存。实测 6.3 GB 目录树上 10 路并发比串行快 4.2 倍（283 → 1179 MB/s）。</p>
+      </div>
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.75A.75.75 0 0 1 2.75 2h4.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-4.25ZM10.75 2a.75.75 0 0 1 .75.75v4.25a.75.75 0 0 1-1.5 0V3.5h-3.5a.75.75 0 0 1 0-1.5h4.25ZM2 12.5a.75.75 0 0 1 .75-.75h4.25a.75.75 0 0 1 0 1.5H3.5v3.5a.75.75 0 0 1-1.5 0V12.5Zm11.25-1.25a.75.75 0 0 1 .75.75v4.25a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5h3.5V12a.75.75 0 0 1 .75-.75Z"/></svg></div>
+        <h3>本地目录目标端</h3>
+        <p>路径逃逸双重校验：词法归一化 + 软链接解析，且校验目标自身而非只校验父目录。</p>
+      </div>
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a6.5 6.5 0 0 1 6.5 6.5c0 3.59-2.91 6.5-6.5 6.5a6.48 6.48 0 0 1-2.86-.66l-2.4.7a.75.75 0 0 1-.93-.93l.7-2.4A6.48 6.48 0 0 1 1.5 7.5C1.5 3.91 4.41 1 8 1Z"/></svg></div>
+        <h3>SMB 目标端</h3>
+        <p>走系统 NetFS 框架挂载后复用本地驱动，读写语义与本地目录天然一致。自动复用已挂载的卷，不重复挂载。</p>
+      </div>
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5c-3.3 0-6 1.34-6 3v7c0 1.66 2.7 3 6 3s6-1.34 6-3v-7c0-1.66-2.7-3-6-3Zm0 1.5c2.9 0 4.5 1.06 4.5 1.5S10.9 6 8 6 3.5 4.94 3.5 4.5 5.1 3 8 3ZM3.5 12V9.62c1.2.63 2.85.88 4.5.88s3.3-.25 4.5-.88V12c0 .44-1.6 1.5-4.5 1.5S3.5 12.44 3.5 12Z"/></svg></div>
+        <h3>WebDAV 目标端</h3>
+        <p>URLSession 直发 PROPFIND／PUT／MKCOL／DELETE，自写 multistatus 解析。Basic／Digest 认证，可选中放行自签名证书。</p>
+      </div>
+
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 1 3.5 3.5V6h.75A1.75 1.75 0 0 1 14 7.75v5.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-5.5A1.75 1.75 0 0 1 3.75 6H4.5V4.5A3.5 3.5 0 0 1 8 1Zm0 1.5A2 2 0 0 0 6 4.5V6h4V4.5A2 2 0 0 0 8 2.5ZM8 9a1 1 0 0 1 .75 1.66v1.09a.75.75 0 0 1-1.5 0v-1.09A1 1 0 0 1 8 9Z"/></svg></div>
+        <h3>凭据进系统钥匙串</h3>
+        <p>任务结构里只保存用户名，密码不落配置文件、不进日志、不出现在崩溃报告里。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="shots">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">截图</span>
+      <h2>实际界面</h2>
+      <p>以下截图取自真实运行的 v1.0.0 构建，非设计稿。主题支持浅色 / 深色 / 跟随系统。</p>
+    </div>
+    <div class="shots">
+      <input type="radio" name="shot" id="s1" checked>
+      <input type="radio" name="shot" id="s2">
+      <input type="radio" name="shot" id="s3">
+      <div class="shot-tabs">
+        <label for="s1">浅色</label>
+        <label for="s2">深色</label>
+        <label for="s3">跟随系统</label>
+      </div>
+      <div class="shot-panes">
+        <figure class="pane" id="p1">
+          <img src="screenshots/theme-light.png" alt="sync-engine 浅色主题界面">
+          <figcaption>浅色主题 · 同步任务页。强调色为深一档的绿，以保证白底上的对比度。</figcaption>
+        </figure>
+        <figure class="pane" id="p2">
+          <img src="screenshots/theme-dark.png" alt="sync-engine 深色主题界面">
+          <figcaption>深色主题 · 使用品牌色 <code>#32CD32</code>，在深色底上对比度约 7.9:1。</figcaption>
+        </figure>
+        <figure class="pane" id="p3">
+          <img src="screenshots/theme-system.png" alt="sync-engine 跟随系统外观">
+          <figcaption>跟随系统 · 解析为系统当前的具体外观，而不是交给系统留空 —— 后者在运行中切换会导致详情区渲染不出来。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="status">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">进度</span>
+      <h2>已完成 / 尚未实现</h2>
+      <p>
+        v1.0.0 的功能**并不完整**。把这一点写清楚，比让用户下载后才发现更有价值 ——
+        未实现的部分在应用界面上也有同样的标注。
+      </p>
+    </div>
+    <div class="status">
+      <div class="box done">
+        <h3><span class="dot"></span>已完成</h3>
+        <ul>
+          <li><b>目录扫描</b> —— 显式栈递归、不跟随软链接、三阶段分开计时</li>
+          <li><b>并发 SHA-256</b> —— 滑动窗口，10 路比串行快 4.2 倍</li>
+          <li><b>本地目录驱动</b> —— 含路径逃逸双重校验</li>
+          <li><b>SMB 驱动</b> —— 系统 NetFS 挂载 + 复用已挂载卷</li>
+          <li><b>WebDAV 驱动</b> —— 完整读写原语，直发 WebDAV 方法</li>
+          <li><b>钥匙串凭据</b> —— 密码不落配置文件</li>
+          <li><b>界面外壳</b> —— 三功能区、菜单栏常驻、外观三态、任务可编辑</li>
+        </ul>
+      </div>
+      <div class="box todo">
+        <h3><span class="dot"></span>尚未实现</h3>
+        <ul>
+          <li><b>传输能力</b> —— 目前只能扫描并列文件，不会真正写入目标端</li>
+          <li><b>增量同步</b> —— 每次全量重算哈希，无哈希缓存</li>
+          <li><b>三方比对与冲突裁决</b> —— 目标端被改动过的文件不会被识别</li>
+          <li><b>同步删除</b> —— 因缺少冲突裁决，该开关当前不存在</li>
+          <li><b>断点续传</b> —— 传输未实现，无从谈起</li>
+          <li><b>FSEvents 监听</b> —— 只能手动触发扫描，扫描期间不可取消</li>
+          <li><b>任务与日志持久化</b> —— 退出即丢</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="download">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">下载</span>
+      <h2>v1.0.0</h2>
+      <p>未公证的临时签名版本，需要 macOS 14 或更高。</p>
+    </div>
+    <div class="dl-wrap">
+      <div class="dl">
+        <div class="meta">
+          <strong>Apple Silicon（M 系列）</strong>
+          <span>sync-engine-v1.0.0-arm64.dmg</span>
+        </div>
+        <a class="get" href="https://github.com/zdx8/SyncEngine-macOS/releases/download/v1.0.0/sync-engine-v1.0.0-arm64.dmg">下载</a>
+      </div>
+      <div class="dl">
+        <div class="meta">
+          <strong>Intel（x86_64）</strong>
+          <span>sync-engine-v1.0.0-x86_64.dmg</span>
+        </div>
+        <a class="get" href="https://github.com/zdx8/SyncEngine-macOS/releases/download/v1.0.0/sync-engine-v1.0.0-x86_64.dmg">下载</a>
+      </div>
+      <div class="note">
+        <b>首次打开会被 Gatekeeper 拦下</b>，这是预期行为 —— 安装包为临时签名、未经 Apple 公证。
+        把 <code>sync-engine.app</code> 拖进「应用程序」后，<b>右键 → 打开</b>，
+        或到「系统设置 → 隐私与安全性」点「仍要打开」。放行一次即可，之后正常双击启动。
+      </div>
+      <p style="text-align:center;margin-top:20px;font-size:14px;">
+        全部版本见 <a href="https://github.com/zdx8/SyncEngine-macOS/releases">Releases</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="build">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">构建</span>
+      <h2>从源码构建</h2>
+      <p>只需 Command Line Tools，不需要打开 Xcode。</p>
+    </div>
+    <div class="code-wrap">
+<pre><span class="c"># 克隆并构建</span>
+git clone https://github.com/zdx8/SyncEngine-macOS.git
+cd SyncEngine-macOS/SyncApp
+
+swift build                 <span class="c"># 构建</span>
+swift test                  <span class="c"># 单元测试（76 项）</span>
+bash Scripts/build_app.sh   <span class="c"># 打包成 dist/sync-engine.app</span>
+open dist/sync-engine.app   <span class="c"># 运行</span>
+
+<span class="c"># 打发行版安装包（版本号取自 build_app.sh，不在两处维护）</span>
+bash Scripts/make_dmg.sh 1.0.0 arm64
+bash Scripts/make_dmg.sh 1.0.0 x86_64</pre>
+
+      <h3>无界面验证</h3>
+<pre><span class="c"># 跑的是打包产物本身 —— 即用户拿到的那个二进制</span>
+dist/sync-engine.app/Contents/MacOS/sync-engine --selfcheck
+
+<span class="c"># 性能基准：指定并发度</span>
+dist/sync-engine.app/Contents/MacOS/sync-engine --bench ~/目录 10</pre>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="verify">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">验证</span>
+      <h2>不依赖肉眼的验证</h2>
+      <p>这个项目的验证原则是：任何结论都要由可机器判定的证据支撑，而不是「看起来对」。</p>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead>
+          <tr><th>层</th><th>手段</th><th>覆盖</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>引擎逻辑</td>
+            <td><code>swift test</code>（76 项）</td>
+            <td>哈希向量、扫描统计、软链策略、路径逃逸、计时不变量、错误路径</td>
+          </tr>
+          <tr>
+            <td>存储驱动</td>
+            <td><code>swift test</code>（真实 IO）</td>
+            <td>对<b>进程内真实 WebDAV 服务端</b>做完整往返；对<b>真实 SMB 挂载</b>做只读验证</td>
+          </tr>
+          <tr>
+            <td>交付产物</td>
+            <td><code>--selfcheck</code>（16 项）</td>
+            <td>真实 <code>.app</code> 内那份二进制能否跑通引擎与驱动接线</td>
+          </tr>
+          <tr>
+            <td>界面渲染</td>
+            <td>单窗口截图 + 位图像素分析</td>
+            <td>主题一致性、强调色是否统一、内容是否真的画出来了</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="text-align:center;margin-top:24px;font-size:14px;color:var(--ink-500);max-width:760px;margin-left:auto;margin-right:auto;">
+      两条值得一提的做法：断言只验<b>结构性不变量</b>（如「分项耗时之和 ≤ 总耗时」），
+      不验机器相关的具体数值 —— 后者必然变成 flaky 测试；
+      以及<b>只在某条操作路径上出现的缺陷，必须把那条路径本身做成可复现的</b>
+      （例如「运行中切换主题」无法靠静态启动验证，因此应用内置了走同一入口的诊断钩子）。
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      <a href="https://github.com/zdx8/SyncEngine-macOS">GitHub 仓库</a> ·
+      <a href="https://github.com/zdx8/SyncEngine-macOS/releases">Releases</a> ·
+      <a href="https://github.com/zdx8/SyncEngine-macOS/blob/main/README.md">README</a> ·
+      <a href="https://github.com/zdx8/SyncEngine-macOS/blob/main/LICENSE">MIT 许可证</a>
+    </p>
+    <p class="muted">© 2026 SyncEngine-macOS Contributors · 本页为静态页面，无任何外部依赖与跟踪脚本</p>
+  </div>
+</footer>
+
+</body>
+</html>
